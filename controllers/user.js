@@ -118,3 +118,83 @@ export const login = async (req, res) => {
     });
   }
 }
+
+
+export const profile = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    console.log(userId);
+    console.log("User en la solicitud:", req.user);
+
+    if(!req.user || !req.user.userId){
+      return res.status(401).send({
+        status: "success",
+        message: "Usuario no autenticado"
+      })
+    }
+
+    const userProfile = await User.findById(userId).select('-password -role -email -__v');
+
+    console.log(userProfile);
+    
+
+    if(!userProfile){
+      return res.status(404).send({
+        status: "success",
+        message: "usuario no encontrado"
+      })
+    }
+
+    return res.status(200).json({
+      status: "success",
+      user: userProfile
+    })
+
+
+  } catch (error) {
+    console.log("Error al obtener el perfil del usuario", error);
+    return res.status(500).send({
+      status: "error", 
+      message: "Error al obtener el perfil del usuario"
+    });
+  }
+}
+
+
+export const listUsers = async (req, res) => {
+
+  try {
+    
+    let page= req.params.page ? parseInt(req.params.page, 10) : 1;
+
+    let itemsPerPage= req.query.limit ? parseInt(req.params.page, 10) : 4;
+
+    const options = {
+      page: page,
+      limit: itemsPerPage,
+      select: '-password -email -role -__v'
+    };
+    const users = await User.paginate({}, options);
+
+    if(!users || users.docs.length === 0){
+      return res.status(404).send({
+        status: "error", 
+        message: "No existen usuarios disponibles"
+      })
+    }
+
+    return res.status(200).json({
+      status: "success",
+      users:  users.docs,
+      totalDocs: users.totalDocs,
+      totalPages: users.totalPages,
+    })
+  } catch (error) {
+    
+    console.log("Error al listar los usuarios: ", error);
+    return res.status(500).send({
+      status: "error", 
+      message: "Error al listar los usuarios:"
+    });
+  }
+}
