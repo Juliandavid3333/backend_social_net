@@ -198,3 +198,142 @@ export const listUsers = async (req, res) => {
     });
   }
 }
+
+export const updateUser = async (req, res) => {
+  try {
+
+    let userIdentity = req.user;
+    let userToUpdate = req.body;
+
+    delete userToUpdate.iat;
+    delete userToUpdate.exp;
+    delete userToUpdate.role;
+
+    const users = await User.find({
+      $or: [
+      { email: userToUpdate.email },
+      { nick: userToUpdate.nick }
+      ]
+    }).exec();
+
+    const isDuplicateUser = users.some(user => {
+      return user && user._id.toString() === userIdentity.userId;
+    });
+
+    if (isDuplicateUser) {
+      return res.status(400).send({
+        status: "error",
+        message: "Solo se puede actualizar datos de usuario logueado"
+      });
+    }
+
+    if (userToUpdate.password) {
+      try {
+        let pwd = await bcrypt.hash(userToUpdate.password, 10);
+        userToUpdate.password = pwd;
+      } catch (error) {
+        return res.status(500).send({
+          status: "error",
+          message: "Error al cifrar la contraseña"
+        });
+      }
+    } else {
+      delete userToUpdate.password;
+    }
+
+    let userUpdated = await User.findByIdAndUpdate(userIdentity.userId, 
+      userToUpdate, {new: true});
+      if(!userUpdated){
+        return res.status(400).send({
+          status: "error",
+          message: "Error al actualizar el usuario"
+        })
+      }
+      
+    return res.status(200).json({
+      status: "success",
+      message: "Usuario actualizado correctamente",
+      user: userUpdated
+    });
+    
+  } catch (error) {
+    console.log("Error al actualizar los datos del usuario: ", error);
+    return res.status(500).send({
+      status: "error",
+      message: "Error al listar usuarios"
+    });
+  }
+}
+
+export const uploadAvatar = async (req, res) => {
+  try {
+    // Verificar si se ha subido un archivo
+    if(!req.file){
+      return res.status(400).send({
+        status: "error",
+        message: "Error la petición no incluye la imagen"
+      });
+    }
+
+    // Obtener la URL del archivo subido en Cloudinary
+    const avatarUrl = req.file.path;
+
+    // Guardar la imagen en la BD
+    const userUpdated = await User.findByIdAndUpdate(
+      req.user.userId,
+      { image: avatarUrl },
+      { new: true }
+    );
+
+    // Verificar si la actualización fue exitosa
+    if(!userUpdated){
+      return res.status(500).send({
+        status: "error",
+        message: "Error al subir el archivo del avatar"
+      });
+    }
+
+    // Devolver respuesta exitosa
+    return res.status(200).json({
+      status: "success",
+      user: userUpdated,
+      file: avatarUrl
+    });
+
+  } catch (error) {
+    console.log("Error al subir el archivo del avatar", error);
+    return res.status(500).send({
+      status: "error",
+      message: "Error al subir el archivo del avatar"
+    });
+  }
+
+}
+
+export const avatar = async (req, res) => {
+  try {
+    // Obtener el ID desde el parámetro del archivo 
+    const userId = req.params.id;
+
+    // Buscar el usuario en la base de datos para obtener la URL de Cloudinary
+    const user = await User.findById(userId).select('image');
+
+    // Verificar si el usuario existe y tiene una imagen
+    if(!user || !user.image){
+      return res.status(404).send({
+        status: "error",
+        message: "No existe usuario o imagen"
+      });
+    }
+
+    // Redirigir a la URL de la imagen en Cloudinary
+    return res.redirect(user.image);
+
+  } catch (error) {
+  console.log("Error al mostrar el archivo del avatar", error);
+  return res.status(500).send({
+    status: "error",
+    message: "Error al mostrar el archivo del avatar"
+  });
+  }
+};
